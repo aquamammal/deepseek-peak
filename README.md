@@ -46,7 +46,13 @@ reference implementation at [seekpeak.dev](https://seekpeak.dev/).
 
 ## Install
 
+Requires an Ubuntu/GNOME desktop on **GNOME Shell 45 or newer** and
+`glib-compile-schemas` (package `libglib2.0-bin`, normally already present).
+Nothing else is needed to run it — the extension has no dependencies.
+
 ```bash
+git clone https://github.com/aquamammal/deepseek-peak.git
+cd deepseek-peak
 ./install.sh          # install and enable
 ```
 
@@ -206,7 +212,8 @@ What is covered:
   timer, notifications, and that `disable()` leaves no timer or signal handler
   behind. Run it with `TZ=UTC`, since it asserts on clock text.
 
-`make test` needs Node 20+ and Python 3.10+; neither is needed at runtime.
+`make test` needs Node 20+ and Python 3.10+; neither is needed at runtime — the
+shipped extension is dependency-free.
 
 ## Gotchas worth knowing
 

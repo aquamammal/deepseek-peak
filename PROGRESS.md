@@ -2,6 +2,22 @@
 
 Newest first. Each entry: what changed, what was verified, what is next.
 
+## 2026-10-02 — Published to GitHub
+
+- Created **public** repo `https://github.com/aquamammal/deepseek-peak` and pushed
+  `main`. Initial commit: 42 files, 4601 insertions. Matches the account's
+  convention (public for projects like `ichnaea`, `viewlette`, `Geodex`); no
+  LICENSE file, consistent with the sibling projects.
+- `.gitignore` extended to exclude the built `deepseek-peak@akuma.dev.zip`.
+  Verified on the remote: 42 blobs, and the zip, `gschemas.compiled`, and
+  `__pycache__` are all absent. No secrets or tokens in the tree.
+- Commit identity: `aquamammal <1587772+aquamammal@users.noreply.github.com>`
+  (GitHub email is private, so the noreply form is used).
+- **Fixed a README gap the publish exposed:** the Install section assumed the
+  files were already on disk. It now starts with `git clone …` and states the
+  GNOME 45+ / `glib-compile-schemas` requirements, and notes that Node/Python are
+  test-only.
+
 ---
 
 ## 2026-10-02 — Moved into `~/Documents/Projects/Programming/` and adopted the house doc format
