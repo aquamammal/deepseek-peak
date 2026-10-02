@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="deepseek-peak">
+  <schema id="org.gnome.shell.extensions.deepseek-peak" path="/org/gnome/shell/extensions/deepseek-peak/">
+
+    <key name="panel-mode" type="s">
+      <default>'words'</default>
+      <summary>What to draw on the top bar</summary>
+      <description>
+        words: "Peak" / "Off-peak".
+        time: next rate change on your clock.
+        dot: a filled circle when peak, hollow when off-peak.
+        clock: just your local time.
+        none: nothing (the menu is still reachable by keyboard).
+      </description>
+      <choices>
+        <choice value="words"/>
+        <choice value="time"/>
+        <choice value="dot"/>
+        <choice value="clock"/>
+        <choice value="none"/>
+      </choices>
+    </key>
+
+    <key name="hour12" type="b">
+      <default>false</default>
+      <summary>Use a 12-hour clock in times shown by the menu</summary>
+    </key>
+
+    <key name="colourise" type="b">
+      <default>true</default>
+      <summary>Colour the panel text green when off-peak and amber when peak</summary>
+    </key>
+
+    <key name="notify-on-change" type="b">
+      <default>true</default>
+      <summary>Send a desktop notification when the billing rate changes</summary>
+    </key>
+
+    <key name="auto-update-holidays" type="b">
+      <default>true</default>
+      <summary>Fetch the Chinese public-holiday list once a day</summary>
+      <description>Falls back silently to the bundled list when offline.</description>
+    </key>
+
+    <key name="holiday-feed-url" type="s">
+      <default>'https://raw.githubusercontent.com/steffenr/seekpeak.dev/develop/config.json'</default>
+      <summary>URL of the holiday-list feed</summary>
+      <description>Any JSON document of the shape {"chinaPublicHolidays": {"dates": ["YYYY-MM-DD", ...]}} is accepted.</description>
+    </key>
+
+    <key name="holiday-overrides" type="s">
+      <default>''</default>
+      <summary>Cached holiday dates downloaded from the feed, one YYYY-MM-DD per line</summary>
+    </key>
+
+    <key name="holiday-overrides-fetched-at" type="s">
+      <default>''</default>
+      <summary>ISO timestamp of the last successful holiday-feed fetch</summary>
+    </key>
+
+  </schema>
+</schemalist>

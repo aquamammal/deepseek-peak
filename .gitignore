@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.zip
+extension/schemas/gschemas.compiled
+
+# Build output
+deepseek-peak@akuma.dev.zip

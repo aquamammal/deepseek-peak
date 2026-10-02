@@ -1,0 +1,10 @@
+{
+  "uuid": "deepseek-peak@akuma.dev",
+  "name": "DeepSeek Peak Hours",
+  "description": "Shows whether the DeepSeek API is currently billed at peak (2x) or off-peak rates, and when the next rate change happens. Peak hours are 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday, excluding Chinese public holidays; weekends and Chinese public holidays in Beijing time are always off-peak.",
+  "shell-version": ["45", "46", "47", "48"],
+  "settings-schema": "org.gnome.shell.extensions.deepseek-peak",
+  "gettext-domain": "deepseek-peak",
+  "url": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "version": 1
+}

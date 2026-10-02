@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""deepseek-peak — is the DeepSeek API billing at peak rates right now?
+
+The same rules the GNOME indicator uses, in your terminal:
+
+    $ deepseek-peak
+    OFF-PEAK - 2x cheaper . next peak Fri 21:00 (in 3h 42m) . outside peak hours
+
+Rules (https://api-docs.deepseek.com/quick_start/pricing/):
+peak is 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday, excluding Chinese
+public holidays. Weekends and Chinese public holidays in Beijing time are
+off-peak all day.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+
+from deepseek_peak_core import compile_holidays  # noqa: E402
+from deepseek_peak_data import BUNDLED_HOLIDAYS, MODELS, PEAK_MULTIPLIER  # noqa: E402
+from deepseek_peak_report import (  # noqa: E402
+    as_json,
+    format_duration,
+    detect_timezone,
+    evaluate,
+    format_clock_with_day,
+    price_text,
+    summarize,
+    today_blocks_text,
+    window_table,
+    zone,
+)
+
+COLOUR_ON = {
+    "off-peak": "\033[92m",
+    "peak": "\033[93m",
+}
+COLOUR_RESET = "\033[0m"
+COLOUR_DIM = "\033[2m"
+
+
+def parse_instant(value: str) -> dt.datetime:
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            f"not an ISO-8601 timestamp: {value!r}"
+        ) from error
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def loaded_holidays(path: str | None) -> frozenset[str]:
+    """Bundled holidays, plus an optional newline-separated override file."""
+    mapping = {year: list(days) for year, days in BUNDLED_HOLIDAYS.items()}
+    if path:
+        with open(path, encoding="utf-8") as handle:
+            extra = [line.strip() for line in handle if line.strip()]
+        mapping["overrides"] = extra
+    return compile_holidays(mapping)
+
+
+def use_colour(flag: bool) -> bool:
+    if os.environ.get("NO_COLOR"):
+        return False
+    return flag or sys.stdout.isatty()
+
+
+def render(report: dict, args: argparse.Namespace, colour: bool) -> str:
+    tz = zone(report["timeZone"])
+    lines = []
+
+    status = report["status"].upper()
+    if colour:
+        status = f"{COLOUR_ON[report['status']]}{status}{COLOUR_RESET}"
+    lines.append(f"{status}  \u00b7  {report['reasonText']}")
+
+    if report["peak"]:
+        until = format_clock_with_day(report["nextTransition"], tz, report["now"], args.hour12)
+        lines.append(
+            f"Billed at {PEAK_MULTIPLIER}\u00d7 peak rates. "
+            f"Off-peak resumes {until} (in {_duration(report)})."
+        )
+    else:
+        transition = report["nextTransition"]
+        if transition:
+            when = format_clock_with_day(transition, tz, report["now"], args.hour12)
+            label = "Next peak" if report["nextTransitionPeak"] else "Next rate change"
+            lines.append(
+                f"Billed at off-peak rates (half of peak). "
+                f"{label} {when} (in {_duration(report)})."
+            )
+        else:
+            lines.append("Billed at off-peak rates (half of peak).")
+
+    lines.append("")
+    lines.append(f"Peak today:      {today_blocks_text(report, args.hour12)}")
+    lines.append(
+        f"Daily windows:   {window_table(report['timeZone'], args.hour12)}"
+        f"  ({report['utcOffset']})"
+    )
+    lines.append(f"Your timezone:   {report['timeZone']}")
+    lines.append(
+        f"UTC now:         {report['now'].strftime('%Y-%m-%d %H:%M')}"
+    )
+    if report["holidayDataStale"]:
+        lines.append(
+            f"{COLOUR_DIM if colour else ''}Note: the bundled holiday list ends "
+            f"{report['holidaysKnownThrough']}; later days are treated as non-holidays."
+            f"{COLOUR_RESET if colour else ''}"
+        )
+
+    if args.prices:
+        lines.append("")
+        lines.append("Per 1M tokens (USD):")
+        for model in MODELS:
+            rate = "peak" if report["peak"] else "off_peak"
+            lines.append(
+                f"  {model['name']:<16} in {price_text(model['cache_miss'][rate])}"
+                f" / out {price_text(model['output'][rate])}"
+                f"  (cache hit {price_text(model['cache_hit'][rate])})"
+            )
+
+    return "\n".join(lines)
+
+
+def _duration(report: dict) -> str:
+    return format_duration(report["msUntilTransition"]) if report["msUntilTransition"] is not None else "?"
+
+
+def run_once(args: argparse.Namespace, colour: bool) -> int:
+    holidays = loaded_holidays(args.holiday_file)
+    report = evaluate(
+        now=args.at,
+        timezone_name=args.timezone or detect_timezone(),
+        holidays=holidays,
+    )
+
+    if args.json:
+        print(json.dumps(as_json(report), indent=2))
+    elif args.summary:
+        print(summarize(report, args.hour12))
+    else:
+        print(render(report, args, colour))
+    return 0
+
+
+def run_watch(args: argparse.Namespace, colour: bool) -> int:
+    holidays = loaded_holidays(args.holiday_file)
+    last = None
+    try:
+        while True:
+            report = evaluate(
+                timezone_name=args.timezone or detect_timezone(),
+                holidays=holidays,
+            )
+            text = summarize(report, args.hour12)
+            if text != last:
+                if colour and last is not None:
+                    sys.stdout.write("\033[2K\r")
+                print(text, flush=True)
+                last = text
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="deepseek-peak",
+        description="Show whether DeepSeek API requests are billed at peak rates right now.",
+        epilog="Rules: peak 01:00-04:00 and 06:00-10:00 UTC, Mon-Fri, "
+               "excluding Chinese public holidays. Weekends and Chinese public "
+               "holidays in Beijing time are off-peak all day.",
+    )
+    parser.add_argument("--timezone", "-t", metavar="ZONE",
+                        help="IANA timezone for the clocks shown (default: your system zone)")
+    parser.add_argument("--at", type=parse_instant, metavar="ISO8601",
+                        help="evaluate a specific UTC instant, e.g. 2026-10-05T01:30:00Z")
+    parser.add_argument("--json", action="store_true",
+                        help="print machine-readable JSON")
+    parser.add_argument("--summary", "-s", action="store_true",
+                        help="print a single line")
+    parser.add_argument("--prices", "-p", action="store_true",
+                        help="also list per-1M-token prices for the active rate")
+    parser.add_argument("--hour12", action="store_true",
+                        help="use a 12-hour clock")
+    parser.add_argument("--no-colour", "--no-color", action="store_true", dest="no_colour",
+                        help="disable ANSI colour")
+    parser.add_argument("--holiday-file", metavar="PATH",
+                        help="extra YYYY-MM-DD dates, one per line, to treat as holidays")
+    parser.add_argument("--watch", action="store_true",
+                        help="keep running and print a line whenever the verdict changes")
+    parser.add_argument("--interval", type=float, default=5.0, metavar="SECONDS",
+                        help="poll interval for --watch (default: 5)")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    colour = use_colour(not args.no_colour)
+    if args.watch:
+        return run_watch(args, colour)
+    return run_once(args, colour)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
